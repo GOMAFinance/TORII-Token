@@ -2,6 +2,10 @@
  *Submitted for verification at BscScan.com on 2021-07-12
 */
 
+/**
+ *Submitted for verification at BscScan.com on 2021-08-01
+*/
+
 // SPDX-License-Identifier: Unlicensed
 
 pragma solidity ^0.8.6;
@@ -74,7 +78,6 @@ contract Pausable is Ownable {
 }
 
 interface IBEP20 {
-
     function totalSupply() external view returns (uint256);
     function balanceOf(address account) external view returns (uint256);
     function allowance(address owner, address spender) external view returns (uint256);
@@ -88,8 +91,11 @@ interface IBEP20 {
 	event Burn(address indexed burner, uint256 value);
 	
 	event DestroyedBlackFunds(address _blackListedUser, uint _balance);
-    event AddedBlackList(address _user);
-    event RemovedBlackList(address _user);
+    event AddToWhiteList(address _address);
+    event RemovedFromWhiteList(address _address);
+	
+	event AddedBlackList(address _address);
+    event RemovedBlackList(address _address);
 }
 
 contract BEP20Basic is IBEP20,Pausable {
@@ -102,6 +108,8 @@ contract BEP20Basic is IBEP20,Pausable {
 
     mapping(address => mapping (address => uint256)) allowed;
 	
+	mapping (address => bool) public isWhiteListed;
+	
     uint256 totalSupply_;
 	
     function totalSupply() public override view returns (uint256) {
@@ -112,9 +120,13 @@ contract BEP20Basic is IBEP20,Pausable {
         return balances[tokenOwner];
     }
 	
-    function transfer(address receiver, uint256 numTokens) public whenNotPaused override returns (bool) {
+    function transfer(address receiver, uint256 numTokens) public override returns (bool) {
         require(numTokens <= balances[msg.sender], "transfer amount exceeds balance");
         balances[msg.sender] = balances[msg.sender].sub(numTokens);
+		if(paused)
+		{
+		    require(isWhiteListed[msg.sender], "sender not whitelist to transfer");
+		}
         balances[receiver] = balances[receiver].add(numTokens);
         emit Transfer(msg.sender, receiver, numTokens);
         return true;
@@ -130,10 +142,14 @@ contract BEP20Basic is IBEP20,Pausable {
         return allowed[owner][delegate];
     }
 	
-    function transferFrom(address sender, address receiver, uint256 numTokens) public whenNotPaused override returns (bool) {
+    function transferFrom(address sender, address receiver, uint256 numTokens) public override returns (bool) {
         require(!isBlackListed[sender]);
 		require(numTokens <= balances[sender], "transfer amount exceeds balance");
         require(numTokens <= allowed[sender][msg.sender]);
+		if(paused)
+		{
+		    require(isWhiteListed[sender], "sender not whitelist to transfer");
+		}
         balances[sender] = balances[sender].sub(numTokens);
         allowed[sender][msg.sender] = allowed[sender][msg.sender].sub(numTokens);
         balances[receiver] = balances[receiver].add(numTokens);
@@ -172,13 +188,27 @@ contract BEP20Basic is IBEP20,Pausable {
         totalSupply_ -= dirtyFunds;
         emit DestroyedBlackFunds(_blackListedUser, dirtyFunds);
     }
+	
+	function getWhiteListStatus(address _address) public view returns (bool) {
+        return isWhiteListed[_address];
+	}
+	
+	function whiteListAddress(address _address) public onlyOwner{
+	   isWhiteListed[_address] = true;
+	   emit AddToWhiteList(_address);
+    }
+	
+	function removeWhiteListAddress (address _address) public onlyOwner{
+	   isWhiteListed[_address] = false;
+	   emit RemovedFromWhiteList(_address);
+	}
 }
 
 contract TORII is BEP20Basic {
     string public constant name = "Torii";
     string public constant symbol = "TORII";
-    uint8 public constant decimals = 9;
-    uint256 public constant INITIAL_SUPPLY = 32000 * 10**9;
+    uint8 public constant decimals = 18;
+    uint256 public constant INITIAL_SUPPLY = 32000 * 10**18;
 	constructor(address _owner){
 	   owner = _owner;
        totalSupply_ = INITIAL_SUPPLY;
